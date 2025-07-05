@@ -1,69 +1,121 @@
 import React, { useState, useEffect } from 'react';
-import './PokemonFetcher.css'; // Opcional: para estilos básicos
+import './PokemonFetcher.css';
+
+const traduccionTipos = {
+  normal: 'normal',
+  fighting: 'lucha',
+  flying: 'volador',
+  poison: 'veneno',
+  ground: 'tierra',
+  rock: 'roca',
+  bug: 'bicho',
+  ghost: 'fantasma',
+  steel: 'acero',
+  fire: 'fuego',
+  water: 'agua',
+  grass: 'planta',
+  electric: 'eléctrico',
+  psychic: 'psíquico',
+  ice: 'hielo',
+  dragon: 'dragón',
+  dark: 'siniestro',
+  fairy: 'hada'
+};
 
 const PokemonFetcher = () => {
+  const [tipos, setTipos] = useState([]);
+  const [tipoSeleccionado, setTipoSeleccionado] = useState('');
   const [pokemones, setPokemones] = useState([]);
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(false);
   const [error, setError] = useState(null);
-useEffect(() => {
-    const fetchPokemones = async () => {
+
+  // Cargar todos los tipos de Pokémon al montar
+  useEffect(() => {
+    const fetchTipos = async () => {
       try {
-        setCargando(true);
-        setError(null);
-        const fetchedPokemones = [];
-        const pokemonIds = new Set(); // Usar un Set para asegurar IDs únicos
-
-        // Generar 4 IDs de Pokémon únicos aleatorios
-        while (pokemonIds.size < 6) {
-          const randomId = Math.floor(Math.random() * 898) + 1; // 898 es el número actual de Pokémon en la PokeAPI (puedes ajustarlo)
-          pokemonIds.add(randomId);
-        }
-
-        // Convertir el Set a un array para iterar
-        const idsArray = Array.from(pokemonIds);
-
-        for (const id of idsArray) {
-          const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}/`);
-          if (!response.ok) {
-            throw new Error(`Error al cargar el Pokémon con ID ${id}: ${response.statusText}`);
-          }
-          const data = await response.json();
-          fetchedPokemones.push({
-            id: data.id,
-            nombre: data.name,
-            imagen: data.sprites.front_default,
-            tipos: data.types.map(typeInfo => typeInfo.type.name),
-          });
-        }
-        setPokemones(fetchedPokemones);
+        const res = await fetch('https://pokeapi.co/api/v2/type');
+        const data = await res.json();
+        setTipos(data.results);
       } catch (err) {
-        setError(err.message);
-      } finally {
-        setCargando(false);
+        setError('No se pudieron cargar los tipos.');
       }
     };
+    fetchTipos();
+  }, []);
 
-    fetchPokemones();
-  }, []); // El array vacío asegura que se ejecute solo una vez al montar el componente
+  // Buscar Pokémon por tipo
+  const buscarPorTipo = async () => {
+    if (!tipoSeleccionado) return;
 
-  if (cargando) {
-    return <div className="pokemon-container">Cargando Pokémon...</div>;
-  }
+    setCargando(true);
+    setError(null);
+    setPokemones([]);
 
-  if (error) {
-    return <div className="pokemon-container error">Error: {error}</div>;
-  }
+    try {
+      const response = await fetch(`https://pokeapi.co/api/v2/type/${tipoSeleccionado}`);
+      if (!response.ok) {
+        throw new Error(`Tipo no encontrado: ${tipoSeleccionado}`);
+      }
+
+      const data = await response.json();
+      const primeros = data.pokemon.slice(0, 120); // Solo los primeros 120
+
+      const detalles = await Promise.all(
+        primeros.map(async (p) => {
+          const res = await fetch(p.pokemon.url);
+          const info = await res.json();
+          return {
+            id: info.id,
+            nombre: info.name,
+            imagen: info.sprites.front_default,
+            tipos: info.types.map(t => t.type.name),
+          };
+        })
+      );
+
+      setPokemones(detalles);
+    } catch (err) {
+      setError('Error al buscar los Pokémon.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // Obtenemos la clase CSS basada en la traducción del tipo seleccionado
+  const tipoClase = tipoSeleccionado ? traduccionTipos[tipoSeleccionado] || '' : '';
 
   return (
-    <div className='pokemon-container'>
-      <h2>Tus 6 Pokémon Aleatorios</h2>
-      <div className="pokemon-list"> 
-        {pokemones.map(pokemon => (
+    <div className={`pokemon-container ${tipoClase ? `tipo-${tipoClase}` : ''}`}>
+      <h2>Buscar Pokémon por Tipo</h2>
+
+      <select
+        value={tipoSeleccionado}
+        onChange={(e) => setTipoSeleccionado(e.target.value)}
+      >
+        <option value="">Selecciona un tipo</option>
+        {tipos.map((tipo) => (
+          <option key={tipo.name} value={tipo.name}>
+            {traduccionTipos[tipo.name]
+              ? traduccionTipos[tipo.name].charAt(0).toUpperCase() + traduccionTipos[tipo.name].slice(1)
+              : tipo.name.charAt(0).toUpperCase() + tipo.name.slice(1)}
+          </option>
+        ))}
+      </select>
+
+      <button onClick={buscarPorTipo} disabled={!tipoSeleccionado}>
+        Buscar
+      </button>
+
+      {cargando && <p>Cargando Pokémon...</p>}
+      {error && <p className="error">{error}</p>}
+
+      <div className="pokemon-list">
+        {pokemones.map((pokemon) => (
           <div key={pokemon.id} className="pokemon-card">
             <h3>{pokemon.nombre.charAt(0).toUpperCase() + pokemon.nombre.slice(1)}</h3>
             <img src={pokemon.imagen} alt={pokemon.nombre} />
             <p>
-              **Tipos:** {pokemon.tipos.map(type => type.charAt(0).toUpperCase() + type.slice(1)).join(', ')}
+              <strong>Tipos:</strong> {pokemon.tipos.join(', ')}
             </p>
           </div>
         ))}
