@@ -226,3 +226,7 @@ button:hover, select:hover {
   --texto-secundario: #4fc3f7;
   --borde-suave: #b3e5fc;
 }
+
+.form-group {
+  margin-bottom: 10px;
+}
